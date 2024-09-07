@@ -6,7 +6,7 @@ function App() {
   return (
     <div className="App">
       <header className="bg-blue-500 text-white p-4">
-        <h1 className="text-2xl font-bold">Hall Booking System</h1>
+        <h1 className="text-2xl font-bold">KSR - Hall Booking System</h1>
       </header>
       <main className="container mx-auto mt-8">
         <Calendar />
