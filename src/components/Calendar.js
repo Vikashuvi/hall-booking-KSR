@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addDays, subDays, getDay } from 'date-fns';
 import BookingModal from './BookingModal';
+import { db } from "../firebase";
+import { collection, addDoc } from "firebase/firestore";
+
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -33,10 +36,15 @@ const Calendar = () => {
     setIsModalOpen(true);
   };
 
-  const handleBookingSubmit = (bookingData) => {
-    setBookings([...bookings, bookingData]);
-    setIsModalOpen(false);
-    // Here you would typically send this data to a backend API
+  const handleBookingSubmit = async (bookingData) => {
+    try {
+      const docRef = await addDoc(collection(db, "bookings"), bookingData);
+      console.log("Document written with ID: ", docRef.id);
+      setBookings([...bookings, { ...bookingData, id: docRef.id }]);
+      setIsModalOpen(false);
+    } catch (e) {
+      console.error("Error adding document: ", e);
+    }
   };
 
   const getBookedSlots = () => {
