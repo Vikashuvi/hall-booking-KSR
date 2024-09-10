@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addDays, subDays, getDay } from 'date-fns';
 import BookingModal from './BookingModal';
 import { db } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
-
+import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -11,9 +10,21 @@ const Calendar = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
 
-  // Sample available halls - you might want to fetch this from an API
   const availableHalls = ['Hall A', 'Hall B', 'Hall C'];
+
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  const fetchBookings = async () => {
+    const querySnapshot = await getDocs(collection(db, "bookings"));
+    const fetchedBookings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setBookings(fetchedBookings);
+  };
 
   const goToToday = () => setCurrentDate(new Date());
   const goToNextPeriod = () => {
@@ -36,14 +47,36 @@ const Calendar = () => {
     setIsModalOpen(true);
   };
 
+  const isTimeSlotAvailable = (date, startTime, endTime, hall) => {
+    return !bookings.some(booking =>
+      isSameDay(new Date(booking.date), date) &&
+      booking.selectedHall === hall &&
+      ((startTime >= booking.startTime && startTime < booking.endTime) ||
+      (endTime > booking.startTime && endTime <= booking.endTime) ||
+      (startTime <= booking.startTime && endTime >= booking.endTime))
+    );
+  };
+
   const handleBookingSubmit = async (bookingData) => {
+    const { date, startTime, endTime, selectedHall } = bookingData;
+
+    if (!isTimeSlotAvailable(new Date(date), startTime, endTime, selectedHall)) {
+      setWarningMessage(`The selected time slot for ${selectedHall} is already booked.`);
+      setShowWarning(true);
+      return;
+    }
+
     try {
       const docRef = await addDoc(collection(db, "bookings"), bookingData);
       console.log("Document written with ID: ", docRef.id);
       setBookings([...bookings, { ...bookingData, id: docRef.id }]);
       setIsModalOpen(false);
+      setShowConfirmation(true);
+      fetchBookings(); // Refresh bookings after adding a new one
     } catch (e) {
       console.error("Error adding document: ", e);
+      setWarningMessage("An error occurred while booking. Please try again.");
+      setShowWarning(true);
     }
   };
 
@@ -55,7 +88,8 @@ const Calendar = () => {
       }
       bookedSlots[booking.selectedHall].push({
         start: booking.startTime,
-        end: booking.endTime
+        end: booking.endTime,
+        date: booking.date
       });
     });
     return bookedSlots;
@@ -190,6 +224,34 @@ const Calendar = () => {
           availableHalls={availableHalls}
           bookedSlots={getBookedSlots()}
         />
+      )}
+      {showConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h2 className="text-2xl font-bold mb-4">Booking Confirmed</h2>
+            <p>Your event has been successfully booked.</p>
+            <button
+              onClick={() => setShowConfirmation(false)}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {showWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h2 className="text-2xl font-bold mb-4 text-red-500">Booking Failed</h2>
+            <p>{warningMessage}</p>
+            <button
+              onClick={() => setShowWarning(false)}
+              className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
